@@ -9,6 +9,7 @@ Users should be able to add and remove packages as dependencies from the LaTeX e
 Users should be able to write a mix of Markdown and LaTeX, in accordance with the MDTeX file format specifications
 Users should be able to style a document using a HTML/CSS or LaTeX template file
 Users should be able to compile MDTeX source files into a PDF or HTML document
+
 # MDTeX
 
-This is the MDTeX monorepo. It contains the MDTeX CLI, as well as the MDTeX common library.
+# This is the MDTeX monorepo. It contains the MDTeX CLI, as well as the MDTeX common library.

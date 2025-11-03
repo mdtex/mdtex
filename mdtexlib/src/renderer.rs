@@ -1,5 +1,5 @@
-use crate::ir::MdtexIR;
+use crate::ir::BlockToken;
 
-pub fn render(source: Vec<MdtexIR>) {
+pub fn render(ir_list: Vec<BlockToken>) {
     todo!();
 }

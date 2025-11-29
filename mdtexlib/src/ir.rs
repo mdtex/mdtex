@@ -1,4 +1,7 @@
 use std::ops::Deref;
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 /// A `BlockToken` represents the broadest unit that the MDTeX parser will break MDTeX into. Each
 /// `BlockToken` variant will either contain a string representing content that is block level,
@@ -24,7 +27,7 @@ pub enum BlockToken {
     /// Corresponds to a block of Latex Math
     BlockMath(String),
     /// Corresponds to a standalone block of text (a paragraph)
-    Paragraph(Vec<InlineToken>), // corresponds to the standalone text type Agastya and I discussed - MFR
+    Paragraph(Vec<InlineToken>),
     /// Corresponds to a markdown table
     Table(Vec<InlineToken>),
 }
@@ -51,11 +54,18 @@ pub enum InlineToken {
 
 /// A raw version of a [BlockToken]. May contain invalid markdown, to be cleaned when lowered into
 /// a [BlockToken]. For example, may containing a Heading 32
+#[derive(Debug)]
 pub enum RawBlock {
-    Heading { raw_content: String, level: u32 },
+    Heading {
+        raw_content: String,
+        level: u32,
+    },
     OrderedList(Vec<String>),
     UnorderedList(Vec<String>),
-    BlockCode(String),
+    BlockCode {
+        content: String,
+        language: Option<String>,
+    },
     BlockMath(String),
     RawParagraph(String),
     RawTable(String),
@@ -64,96 +74,106 @@ pub enum RawBlock {
 impl RawBlock {
     /// Constructs a RawBlock from a string equivalent to a variant of RawBlock
     pub fn from_string(raw_string: impl Deref<Target = str>) -> Self {
-        // One important question is, whose job is it to make sure that this function gets perfect
-        // inputs? Should this function itself reject imperfect inputs? Should it return an Option
-        // or Result based on whether an input is usable? Should the parser itself manage what
-        // inputs this function gets. This implementation assumes the latter.
-        if raw_string.starts_with('#') && raw_string.find('\n').is_none() {
-            // this *may* be a heading, so we can go ahead and try to construct one.
-            // we can try to see if this is truly a header by getting the index of the first
-            // space, then checking to see if the string starts with that many #s
-            // In theory, this should work because all headings look like this:
-            // "###### blah blah blah"
-            if let Some(idx) = raw_string.find(' ') {
-                let possible_heading = "#".repeat(idx);
-                if raw_string.starts_with(&possible_heading) {
-                    let raw_content = raw_string.strip_prefix(&possible_heading).unwrap();
-                    return RawBlock::Heading {
-                        raw_content: raw_content.trim().into(),
-                        level: idx as u32,
-                    };
-                }
-            }
-        } else if raw_string.starts_with("- ") {
-            // unordered lists are fairly easy, we split on lines and insert them into the variant
-            // We are going to assume for now that no bad inputs will be fed to this associated
-            // function
-            let mut lines = raw_string.lines();
-
-            if lines.all(|x| x.starts_with("- ")) {
-                return RawBlock::UnorderedList(
-                    lines
-                        .map(|l| l.strip_prefix('-').unwrap().trim().to_string())
-                        .collect(),
-                );
-            }
-        } else if is_valid_ol_item(&raw_string) {
-            // Ordered lists will be slightly harder, as technically, any numeric characters
-            // before a . at the start of a line is a valid markdown ordered list item
-            let mut lines = raw_string.lines();
-
-            if lines.all(|x| is_valid_ol_item(&x)) {
-                return RawBlock::OrderedList(
-                    lines.map(|l| l.spli.collect());
-            }
-        } else if raw_string.starts_with("$$") {
-            // Again, we will assume that this is a perfectly valid LaTeX Math block, that starts
-            // and ends with $$
+        dbg!(raw_string.to_string());
+        if let Some(head) = RawBlock::try_extract_header(&raw_string) {
+            return head;
+        } else if let Some(code) = RawBlock::try_extract_code(&raw_string) {
+            return code;
+        } else if let Some(math) = RawBlock::try_extract_math(&raw_string) {
+            return math;
+        } else if let Some(_) = RawBlock::try_extract_ol_item(&raw_string) {
+            let mut output: Vec<String> = Vec::new();
+            let mut valid = true;
             for l in raw_string.lines() {
-                let mut math = String::new();
-                if l != "$$" {
-                    math.push_str(l);
+                // TODO: rewrite this using some nicer method chaining
+                if let Some(item) = RawBlock::try_extract_ol_item(&l) {
+                    output.push(item);
+                } else {
+                    valid = false;
+                    break;
                 }
-
-                return RawBlock::BlockMath(math);
             }
-        } else if raw_string.starts_with("```") {
-            // Again, we will assume that this is a perfectly valid LaTeX Math block, that starts
-            // and ends with $$
-            for l in raw_string.lines() {
-                let mut code = String::new();
-                if l != "```" {
-                    code.push_str(l);
-                }
 
-                return RawBlock::BlockCode(code);
+            if valid {
+                return RawBlock::OrderedList(output);
+            }
+        } else if let Some(_) = RawBlock::try_extract_ul_item(&raw_string) {
+            let mut output: Vec<String> = Vec::new();
+            let mut valid = true;
+            for l in raw_string.lines() {
+                // TODO: rewrite this using some nicer method chaining
+                if let Some(item) = RawBlock::try_extract_ul_item(&l) {
+                    output.push(item);
+                } else {
+                    valid = false;
+                    break;
+                }
+            }
+
+            if valid {
+                return RawBlock::UnorderedList(output);
             }
         }
 
-        // To owned because of type inference not working with .into(). Could also use to_string,
-        // but might as well use Rust's type inference when we can
         RawBlock::RawParagraph(raw_string.to_owned())
     }
-}
 
-fn is_valid_ol_item(line: &impl Deref<Target = str>) -> bool {
-    if let Some(idx) = line.find(' ') {
-        if idx < 2 {return false}
+    // Either extracts a valid [RawBlock::Header] or returns `None`
+    fn try_extract_header(raw_string: &impl Deref<Target = str>) -> Option<RawBlock> {
+        static HEADER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"^(#{1,6})\s+(.+)").expect("Should be able to construct Regex")
+        });
 
-        // use iterator to do logic, less expensive
+        HEADER_REGEX
+            .captures(raw_string)
+            .map(|caps| RawBlock::Heading {
+                raw_content: caps[2].to_string(),
+                level: caps[1].len() as u32,
+            })
+    }
 
-        // for c in {
-        //     if !c.is_ascii_digit() {
-        //         return false;
-        //     }
-        // }
+    // Either extracts a valid [RawBlock::Math] or returns `None`
+    fn try_extract_math(raw_string: &impl Deref<Target = str>) -> Option<RawBlock> {
+        static CODE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"^\${2}\n(?s)(.+)(?-s)\${2}").expect("Should be able to construct Regex")
+        });
 
-        true
-    } else {
-        false
+        CODE_REGEX
+            .captures(raw_string)
+            .map(|caps| RawBlock::BlockMath(caps[1].to_string()))
+    }
+
+    // Either extracts a valid [RawBlock::Code] or returns `None`
+    fn try_extract_code(raw_string: &impl Deref<Target = str>) -> Option<RawBlock> {
+        static CODE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"^`{3}(.+)?\n(?s)(.+)(?-s)`{3}").expect("Should be able to construct Regex")
+        });
+
+        CODE_REGEX
+            .captures(raw_string)
+            .map(|caps| RawBlock::BlockCode {
+                language: caps.get(1).map(|m| m.as_str().to_owned()),
+                content: caps[2].to_string(),
+            })
+    }
+
+    /// Either extracts a string corresponding to a valid ordered list item or returns None
+    fn try_extract_ol_item(raw_string: &impl Deref<Target = str>) -> Option<String> {
+        // TODO: add ability to leave items blank, current RegEx requires content after the list
+        // item start.
+        static OL_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+\.\s+(.+)").unwrap());
+
+        OL_REGEX.captures(raw_string).map(|caps| caps[1].into())
+    }
+
+    /// Either extracts a string corresponding to a valid unordered list item or returns None
+    fn try_extract_ul_item(raw_string: &impl Deref<Target = str>) -> Option<String> {
+        static UL_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^-\s+(.+)?").unwrap());
+
+        UL_REGEX.captures(raw_string).map(|caps| caps[1].into())
     }
 }
 
 /// A list item newtype used within a [BlockToken].
 #[derive(Debug)]
-pub struct ListItem(Vec<InlineToken>);
+pub struct ListItem(pub Vec<InlineToken>);

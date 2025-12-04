@@ -6,30 +6,28 @@ use argh::FromArgs;
 pub(crate) struct CompileSubCommand {
     /// recursively compile files in a given folder
     #[argh(switch, short = 'r')]
-    pub(crate) recursive: bool,
+    recursive: bool,
 
     /// specify we want our output as html file(s)
     #[argh(switch)]
-    pub(crate) html: bool,
+    html: bool,
 
     /// specify we want our output as pdf file(s)
     #[argh(switch)]
-    pub(crate) pdf: bool,
+    pdf: bool,
 
     /// specify output to a specific file - must be either pdf or html file extension
     #[argh(option, short = 'o')]
-    pub(crate) output: Option<String>,
+    output: Option<String>,
 
     /// write output files recursively into a folder
     #[argh(option, long="write-recursive", short = 'w')]
-    pub(crate) write_recursive: Option<String>,
+    write_recursive: Option<String>,
 
-    // (maybe): parse input into file or folder
     /// input file/folder
     #[argh(positional)]
-    pub(crate) input: String,
+    input: String,
 }
-
 
 impl CompileSubCommand {
     /// Validates logical consistency of flags and options
@@ -60,62 +58,193 @@ impl CompileSubCommand {
             }
         }
 
+        if !self.input.ends_with(".mdt") {
+            return Err(String::from(
+                "Input file is not .mdt",
+            ));
+        }
+
         Ok(())
     }
 }
 
-
 #[derive(FromArgs, PartialEq, Debug)]
 /// Usage: mdtex watch <flags> <input>
 #[argh(subcommand, name = "watch")]
-pub(crate) struct WatchSubCommand {
-    // (maybe): parse input into file or folder
-    /// input file/folder
+pub(crate) struct WatchSubCommand { }
+
+#[derive(FromArgs, PartialEq, Debug)]
+/// Usage: mdtex new <flags> <project-name>
+#[argh(subcommand, name = "new")]
+pub(crate) struct NewSubCommand {
+    // parse input into folder?
     #[argh(positional)]
-    pub(crate) input: String,
+    pub(crate) project_directory: String,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
-/// Usage: mdtex init <flags> <project-name>
+/// Usage: mdtex init <flags>
 #[argh(subcommand, name = "init")]
-pub(crate) struct InitSubCommand {
-    // parse input into folder?
-    #[argh(positional)]
-    pub(crate) project_name: String,
-}
+pub(crate) struct InitSubCommand { }
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Usage: mdtex add <flags> <package-name>
 #[argh(subcommand, name = "add")]
 pub(crate) struct AddSubCommand {
-    #[argh(positional)]
-    pub(crate) add: String,
+    #[argh(positional, greedy)]
+    pub(crate) add: Vec<String>,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Usage: mdtex build <flags>
 #[argh(subcommand, name = "build")]
-pub(crate) struct BuildSubCommand {
-    #[argh(positional)]
-    pub(crate) build: String,
-}
+pub(crate) struct BuildSubCommand { }
 
+#[cfg(test)]
+mod tests {
+    use assert_cmd::Command;
+    use assert_fs::prelude::*;
+    use crate::*;
 
-/// Unified enum for all possible mdtex subcommands
-#[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand)]
-pub(crate) enum SubCommand {
-    Compile(CompileSubCommand),
-    Watch(WatchSubCommand),
-    Init(InitSubCommand),
-    Add(AddSubCommand),
-    Build(BuildSubCommand),
-}
+    #[test]
+    fn test_cli() {
+        let mut cmd = Command::cargo_bin("mdtexcli").unwrap();
 
-/// Top-level mdtex command
-#[derive(FromArgs, PartialEq, Debug)]
-/// A Markdown-to-TeX converter CLI
-pub(crate) struct MdtexCommand {
-    #[argh(subcommand)]
-    pub(crate) subcommand: SubCommand,
+        cmd.assert().failure();
+        cmd.arg("help").assert().success();
+    }
+
+    // #[test]
+    // fn test_compile() {
+    //     // test just compile = failure
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd.arg("compile");
+    //     compile_cmd.assert().failure();
+
+    //     // test compile with html switch
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd
+    //         .args([
+    //             "compile",
+    //             "--html",
+    //             "file.mdt"
+    //         ]);
+    //     compile_cmd.assert().success();
+
+    //     // test -r switch
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd
+    //         .args([
+    //             "compile",
+    //             "-r",
+    //             "file.mdt"
+    //         ]);
+    //     compile_cmd.assert().success();
+
+    //     // test pdf switch
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd
+    //         .args([
+    //             "compile",
+    //             "--pdf",
+    //             "file.mdt"
+    //         ]);
+    //     compile_cmd.assert().success();
+
+    //     // test html + pdf switch = failure
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd
+    //         .args([
+    //             "compile",
+    //             "--html",
+    //             "--pdf",
+    //             "file.mdt"
+    //         ]);
+    //     compile_cmd.assert().failure();
+
+    //     // test output html file
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd
+    //         .args([
+    //             "compile",
+    //             "--html",
+    //             "--output",
+    //             "out.html",
+    //             "file.mdt"
+    //         ]);
+    //     compile_cmd.assert().success();
+
+    //     // test output pdf file
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd
+    //         .args([
+    //             "compile",
+    //             "--pdf",
+    //             "--output",
+    //             "out.pdf",
+    //             "file.mdt"
+    //         ]);
+    //     compile_cmd.assert().success();
+
+    //     // test output html file with pdf switch = failure
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd
+    //         .args([
+    //             "compile",
+    //             "--pdf",
+    //             "--output",
+    //             "out.html",
+    //             "file.mdt"
+    //         ]);
+    //     compile_cmd.assert().failure();
+
+    //     // test output pdf file with html switch = failure
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+    //     compile_cmd
+    //         .args([
+    //             "compile",
+    //             "--html",
+    //             "-o",
+    //             "out.pdf",
+    //             "file.mdt"
+    //         ]);
+    //     compile_cmd.assert().failure();
+    // }
+
+    // #[test]
+    // fn test_watch() {
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+
+    //     compile_cmd.arg("watch").assert().success();
+    // }
+
+    // #[test]
+    // fn test_new() {
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+
+    //     compile_cmd.arg("new").assert().failure();
+    //     compile_cmd.arg("proj").assert().success();
+    // }
+
+    // #[test]
+    // fn test_init() {
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+
+    //     compile_cmd.arg("init").assert().success();
+    // }
+
+    // #[test]
+    // fn test_add() {
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+
+    //     compile_cmd.arg("add").assert().failure();
+    //     compile_cmd.args(["one", "two", "three"]).assert().success();
+    // }
+
+    // #[test]
+    // fn test_build() {
+    //     let mut compile_cmd = Command::cargo_bin("mdtexcli").unwrap();
+
+    //     compile_cmd.arg("build").assert().success();
+    // }
 }

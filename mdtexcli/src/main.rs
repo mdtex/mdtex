@@ -1,5 +1,6 @@
-use mdtexcli::cli::MDTeXTopLevelCLI;
+use mdtexcli::{cli::MDTeXTopLevelCLI, run};
 
 fn main() {
-    let _args: MDTeXTopLevelCLI = argh::from_env();
+    let args: MDTeXTopLevelCLI = argh::from_env();
+    run(args);
 }

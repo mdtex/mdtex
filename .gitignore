@@ -22,3 +22,6 @@ target
 target/
 
 .DS_Store
+
+# custom ignores
+notes.md

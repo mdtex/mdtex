@@ -27,7 +27,10 @@ Compilation executed using `mdtex` binary:
 ---
 ##### Init
 - Initialize a new mdtex project
-- `mdtex init <flags> <project-name>`
+- `mdtex init <flags>`
+#### Create
+- Create mdtex project in directory
+- `mdtex create <flags> <project-directory>`
 
 ##### Add
 - Add a LaTeX package to the project

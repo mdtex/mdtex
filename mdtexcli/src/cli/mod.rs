@@ -8,7 +8,7 @@ use argh::FromArgs;
 /// Top-level command
 pub struct MDTeXTopLevelCLI {
     #[argh(subcommand)]
-    nested: MDTeXCommands,
+    pub(crate) nested: MDTeXCommands,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -19,9 +19,10 @@ pub struct MDTeXTopLevelCLI {
 /// Init - initialize a new MDTeX project
 /// Add - add a given LaTeX package to the current MDTeX project
 /// Build - build a given MDTeX project
-enum MDTeXCommands {
+pub(crate) enum MDTeXCommands {
     Compile(CompileSubCommand),
     Watch(WatchSubCommand),
+    New(NewSubCommand),
     Init(InitSubCommand),
     Add(AddSubCommand),
     Build(BuildSubCommand),

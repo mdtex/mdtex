@@ -1,3 +1,4 @@
+use crate::parse_to_raw_blocks;
 use crate::parser::RawBlock;
 
 const TEST_DOC: &str = r#"
@@ -339,4 +340,209 @@ fn code_block_with_blank_lines() {
     } else {
         panic!("Code block with blank lines not parsed");
     }
+}
+
+#[test]
+fn parses_single_heading() {
+    let src = "# Hello";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 1);
+    match &blocks[0] {
+        RawBlock::Heading { raw_content, level } => {
+            assert_eq!(*level, 1);
+            assert_eq!(raw_content, "Hello");
+        }
+        _ => panic!("Expected a single heading"),
+    }
+}
+
+#[test]
+fn parses_paragraph() {
+    let src = "This is a paragraph.\nStill same paragraph.";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 1);
+    match &blocks[0] {
+        RawBlock::RawParagraph(p) => {
+            assert!(p.contains("This is a paragraph."));
+            assert!(p.contains("Still same paragraph."));
+        }
+        _ => panic!("Expected RawParagraph"),
+    }
+}
+
+#[test]
+fn parses_math_block() {
+    let src = "$$\n1+1\n$$";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 1);
+    match &blocks[0] {
+        RawBlock::BlockMath(m) => {
+            assert!(m.contains("1+1"));
+        }
+        _ => panic!("Math block not parsed"),
+    }
+}
+
+#[test]
+fn parses_code_block() {
+    let src = "```\ncode here\n```";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 1);
+    match &blocks[0] {
+        RawBlock::BlockCode { content, .. } => {
+            assert!(content.contains("code here"));
+        }
+        _ => panic!("Expected BlockCode"),
+    }
+}
+
+#[test]
+fn parses_ordered_list() {
+    let src = "1. one\n1. two";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 1);
+    match &blocks[0] {
+        RawBlock::OrderedList(items) => {
+            assert_eq!(items, &vec!["one".to_string(), "two".to_string()]);
+        }
+        _ => panic!("Expected OrderedList"),
+    }
+}
+
+#[test]
+fn parses_unordered_list() {
+    let src = "- a\n- b\n- c";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 1);
+    match &blocks[0] {
+        RawBlock::UnorderedList(items) => {
+            assert_eq!(
+                items,
+                &vec!["a".to_string(), "b".to_string(), "c".to_string()]
+            );
+        }
+        _ => panic!("Expected UnorderedList"),
+    }
+}
+
+#[test]
+fn ordered_to_unordered_creates_new_block() {
+    let src = "1. a\n1. b\n- switch";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 2);
+
+    match &blocks[0] {
+        RawBlock::OrderedList(items) => {
+            assert_eq!(items, &vec!["a".to_string(), "b".to_string()]);
+        }
+        _ => panic!("Expected OrderedList as block 0"),
+    }
+
+    match &blocks[1] {
+        RawBlock::UnorderedList(items) => {
+            assert_eq!(items, &vec!["switch".to_string()]);
+        }
+        _ => panic!("Expected UnorderedList as block 1"),
+    }
+}
+
+#[test]
+fn unordered_to_ordered_creates_new_block() {
+    let src = "- u1\n- u2\n1. o1";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 2);
+
+    match &blocks[0] {
+        RawBlock::UnorderedList(items) => {
+            assert_eq!(items, &vec!["u1".to_string(), "u2".to_string()]);
+        }
+        _ => panic!("Expected UnorderedList first"),
+    }
+
+    match &blocks[1] {
+        RawBlock::OrderedList(items) => {
+            assert_eq!(items, &vec!["o1".to_string()]);
+        }
+        _ => panic!("Expected OrderedList second"),
+    }
+}
+
+#[test]
+fn mixed_invalid_list_stays_separate() {
+    let src = "1. one\n- two";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 2);
+    assert!(matches!(blocks[0], RawBlock::OrderedList(_)));
+    assert!(matches!(blocks[1], RawBlock::UnorderedList(_)));
+}
+
+#[test]
+fn block_does_not_end_from_blank_line() {
+    let src = "```\nline1\n\nline2\n```";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 1);
+    match &blocks[0] {
+        RawBlock::BlockCode { content, .. } => {
+            assert!(content.contains("line1"));
+            assert!(content.contains("line2"));
+            assert!(content.contains("\n\n")); // blank line preserved
+        }
+        _ => panic!("Expected code block"),
+    }
+}
+
+#[test]
+fn math_does_not_end_from_blank_line() {
+    let src = "$$\na\n\nb\n$$";
+    let blocks = parse_to_raw_blocks(src);
+
+    assert_eq!(blocks.len(), 1);
+    match &blocks[0] {
+        RawBlock::BlockMath(m) => {
+            assert!(m.contains("a"));
+            assert!(m.contains("b"));
+            assert!(m.contains("\n\n"));
+        }
+        _ => panic!("Expected math block"),
+    }
+}
+
+#[test]
+fn parses_full_document_sequence() {
+    let blocks = parse_to_raw_blocks(TEST_DOC);
+
+    // Expect:
+    // 1. heading
+    // 2. heading
+    // 3. paragraph
+    // 4. math block
+    // 5. code block
+    // 6. paragraph
+    // 7. ordered list
+    // 8. unordered list
+    // 9. unordered list (separate)
+
+    assert!(blocks.len() >= 9, "Got blocks: {:?}", blocks);
+
+    dbg!(&blocks);
+
+    assert!(matches!(blocks[0], RawBlock::Heading { .. }));
+    assert!(matches!(blocks[1], RawBlock::Heading { .. }));
+    assert!(matches!(blocks[2], RawBlock::RawParagraph(_)));
+    assert!(matches!(blocks[3], RawBlock::BlockMath(_)));
+    assert!(matches!(blocks[4], RawBlock::BlockCode { .. }));
+    assert!(matches!(blocks[5], RawBlock::RawParagraph(_)));
+    assert!(matches!(blocks[6], RawBlock::OrderedList(_)));
+    assert!(matches!(blocks[7], RawBlock::UnorderedList(_)));
+    assert!(matches!(blocks[8], RawBlock::UnorderedList(_)));
 }

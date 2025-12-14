@@ -21,7 +21,6 @@ pub enum RawBlock {
     },
     BlockMath(String),
     RawParagraph(String),
-    RawTable(String),
 }
 
 impl RawBlock {
@@ -127,16 +126,211 @@ impl RawBlock {
     }
 }
 
-enum ParseStateMachine {
+enum ParserState {
     Nop,
     Paragraph,
-    Header,
-    MathBlock,
-    CodeBlock,
-    List,
+    // Ordered if true
+    List(bool),
+    // math block if true
+    Block(bool),
+    Heading,
 }
 
-/// This function
+/// This function is written in part by AI. I don't necessarily agree with how it is implemented,
+/// but importantly, it works.
 pub fn parse_to_raw_blocks(source: impl Deref<Target = str>) -> Vec<RawBlock> {
-    todo!()
+    let mut output = vec![];
+    let mut state = ParserState::Nop;
+
+    let mut curr_buffer = String::new();
+
+    for line in source.lines() {
+        // check list types before matching
+        let is_ol = RawBlock::try_extract_ol_item(&line).is_some();
+        let is_ul = RawBlock::try_extract_ul_item(&line).is_some();
+
+        match state {
+            ParserState::Nop => {
+                if is_ol {
+                    state = ParserState::List(true);
+                } else if is_ul {
+                    state = ParserState::List(false);
+                } else if line.starts_with("```") {
+                    state = ParserState::Block(false);
+                } else if line.starts_with("$$") {
+                    state = ParserState::Block(true);
+                } else if line.starts_with('#') {
+                    state = ParserState::Heading;
+                } else if !line.trim().is_empty() {
+                    state = ParserState::Paragraph;
+                }
+            }
+            ParserState::Paragraph => {
+                if line.starts_with("```") {
+                    let block = RawBlock::from_string(curr_buffer.clone());
+                    output.push(block);
+                    curr_buffer.clear();
+                    state = ParserState::Block(false);
+                } else if line.starts_with("$$") {
+                    let block = RawBlock::from_string(curr_buffer.clone());
+                    output.push(block);
+                    curr_buffer.clear();
+                    state = ParserState::Block(true);
+                } else if is_ol {
+                    let block = RawBlock::from_string(curr_buffer.clone());
+                    output.push(block);
+                    curr_buffer.clear();
+                    state = ParserState::List(true);
+                } else if is_ul {
+                    let block = RawBlock::from_string(curr_buffer.clone());
+                    output.push(block);
+                    curr_buffer.clear();
+                    state = ParserState::List(false);
+                } else if line.starts_with('#') {
+                    let block = RawBlock::from_string(curr_buffer.clone());
+                    output.push(block);
+                    curr_buffer.clear();
+                    state = ParserState::Heading;
+                }
+            }
+
+            ParserState::List(is_ordered) => {
+                if is_ordered {
+                    // currently in ordered list
+                    if is_ol {
+                        // continue ordered list
+                    } else if is_ul {
+                        // ordered → unordered: new block
+                        let block = RawBlock::from_string(curr_buffer.clone());
+                        output.push(block);
+                        curr_buffer.clear();
+                        state = ParserState::List(false);
+                    } else {
+                        let block = RawBlock::from_string(curr_buffer.clone());
+                        output.push(block);
+                        curr_buffer.clear();
+
+                        if line.starts_with("```") {
+                            state = ParserState::Block(false);
+                        } else if line.starts_with("$$") {
+                            state = ParserState::Block(true);
+                        } else if line.starts_with('#') {
+                            state = ParserState::Heading;
+                        } else if !line.trim().is_empty() {
+                            state = ParserState::Paragraph;
+                        } else {
+                            state = ParserState::Nop;
+                        }
+                    }
+                } else {
+                    // currently in unordered list
+                    if is_ul {
+                        // continue unordered list
+                    } else if is_ol {
+                        // unordered → ordered: new block
+                        let block = RawBlock::from_string(curr_buffer.clone());
+                        output.push(block);
+                        curr_buffer.clear();
+                        state = ParserState::List(true);
+                    } else {
+                        let block = RawBlock::from_string(curr_buffer.clone());
+                        output.push(block);
+                        curr_buffer.clear();
+
+                        if line.starts_with("```") {
+                            state = ParserState::Block(false);
+                        } else if line.starts_with("$$") {
+                            state = ParserState::Block(true);
+                        } else if line.starts_with('#') {
+                            state = ParserState::Heading;
+                        } else if !line.trim().is_empty() {
+                            state = ParserState::Paragraph;
+                        } else {
+                            state = ParserState::Nop;
+                        }
+                    }
+                }
+            }
+
+            ParserState::Block(is_math) => {
+                // blocks only end at their own fences
+                if is_math {
+                    if line.starts_with("$$") {
+                        curr_buffer.push_str(line);
+                        curr_buffer.push('\n');
+                        let block = RawBlock::from_string(curr_buffer.clone());
+                        output.push(block);
+                        curr_buffer.clear();
+                        state = ParserState::Nop;
+                        continue;
+                    }
+                } else {
+                    if line.starts_with("```") {
+                        curr_buffer.push_str(line);
+                        curr_buffer.push('\n');
+                        let block = RawBlock::from_string(curr_buffer.clone());
+                        output.push(block);
+                        curr_buffer.clear();
+                        state = ParserState::Nop;
+                        continue;
+                    }
+                }
+                // otherwise we stay in block
+            }
+
+            ParserState::Heading => {
+                let block = RawBlock::from_string(curr_buffer.clone());
+                output.push(block);
+                curr_buffer.clear();
+
+                // now treat line fresh
+                if is_ol {
+                    state = ParserState::List(true);
+                } else if is_ul {
+                    state = ParserState::List(false);
+                } else if line.starts_with("```") {
+                    state = ParserState::Block(false);
+                } else if line.starts_with("$$") {
+                    state = ParserState::Block(true);
+                } else if line.starts_with('#') {
+                    state = ParserState::Heading;
+                } else if !line.trim().is_empty() {
+                    state = ParserState::Paragraph;
+                } else {
+                    state = ParserState::Nop;
+                }
+            }
+        }
+
+        // Decide how to append the current line
+        match state {
+            ParserState::Block(_) => {
+                // Full fidelity in code/math blocks
+                curr_buffer.push_str(line);
+                curr_buffer.push('\n');
+            }
+
+            _ => {
+                // For non-blocks, avoid leading empty lines
+                if curr_buffer.is_empty() {
+                    // First line of this block — do NOT prepend a newline
+                    if !line.trim().is_empty() {
+                        curr_buffer.push_str(line);
+                        curr_buffer.push('\n');
+                    }
+                } else {
+                    // Normal: append as usual
+                    curr_buffer.push_str(line);
+                    curr_buffer.push('\n');
+                }
+            }
+        }
+    }
+
+    // flush at end
+    if !curr_buffer.trim().is_empty() {
+        output.push(RawBlock::from_string(curr_buffer));
+    }
+
+    output
 }

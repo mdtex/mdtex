@@ -1,3 +1,5 @@
+use crate::parser::RawBlock;
+
 #[cfg(test)]
 mod tests;
 
@@ -16,18 +18,12 @@ pub enum BlockToken {
     OrderedList(Vec<ListItem>),
     /// Corresponds to an unordered list
     UnorderedList(Vec<ListItem>),
-    /// Corresponds to an list of tasks
-    TaskList(Vec<ListItem>),
-    /// Corresponds to a markdown quote
-    BlockQuotes(String),
     /// Corresponds to a block of code
     BlockCode(String),
     /// Corresponds to a block of Latex Math
     BlockMath(String),
     /// Corresponds to a standalone block of text (a paragraph)
     Paragraph(Vec<InlineToken>),
-    /// Corresponds to a markdown table
-    Table(Vec<InlineToken>),
 }
 
 /// An [InlineToken] is a token that appears inside a [BlockToken].
@@ -53,3 +49,11 @@ pub enum InlineToken {
 /// A list item newtype used within a [BlockToken].
 #[derive(Debug)]
 pub struct ListItem(pub Vec<InlineToken>);
+
+pub fn lower_raw_blocks(raw_blocks: Vec<RawBlock>) -> Vec<BlockToken> {
+    todo!()
+}
+
+fn lower_string_to_inline(string: String) -> Vec<InlineToken> {
+    todo!()
+}

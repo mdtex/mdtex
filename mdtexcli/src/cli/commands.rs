@@ -18,15 +18,15 @@ pub(crate) struct CompileSubCommand {
 
     /// specify output to a specific file - must be either pdf or html file extension
     #[argh(option, short = 'o')]
-    output: Option<String>,
+    pub output: Option<String>,
 
     /// write output files recursively into a folder
-    #[argh(option, long="write-recursive", short = 'w')]
+    #[argh(option, long = "write-recursive", short = 'w')]
     write_recursive: Option<String>,
 
     /// input file/folder
     #[argh(positional)]
-    input: String,
+    pub input: String,
 }
 
 impl CompileSubCommand {
@@ -34,7 +34,9 @@ impl CompileSubCommand {
     pub fn validate(&self) -> Result<(), String> {
         // --- 1. Disallow both --html and --pdf ---
         if self.html && self.pdf {
-            return Err(String::from("Cannot specify both --html and --pdf at the same time."));
+            return Err(String::from(
+                "Cannot specify both --html and --pdf at the same time.",
+            ));
         }
 
         // --- 2. Validate output extension if provided ---
@@ -59,9 +61,7 @@ impl CompileSubCommand {
         }
 
         if !self.input.ends_with(".mdt") {
-            return Err(String::from(
-                "Input file is not .mdt",
-            ));
+            return Err(String::from("Input file is not .mdt"));
         }
 
         Ok(())
@@ -71,7 +71,7 @@ impl CompileSubCommand {
 #[derive(FromArgs, PartialEq, Debug)]
 /// Usage: mdtex watch <flags> <input>
 #[argh(subcommand, name = "watch")]
-pub(crate) struct WatchSubCommand { }
+pub(crate) struct WatchSubCommand {}
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Usage: mdtex new <flags> <project-name>
@@ -85,7 +85,7 @@ pub(crate) struct NewSubCommand {
 #[derive(FromArgs, PartialEq, Debug)]
 /// Usage: mdtex init <flags>
 #[argh(subcommand, name = "init")]
-pub(crate) struct InitSubCommand { }
+pub(crate) struct InitSubCommand {}
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Usage: mdtex add <flags> <package-name>
@@ -98,13 +98,13 @@ pub(crate) struct AddSubCommand {
 #[derive(FromArgs, PartialEq, Debug)]
 /// Usage: mdtex build <flags>
 #[argh(subcommand, name = "build")]
-pub(crate) struct BuildSubCommand { }
+pub(crate) struct BuildSubCommand {}
 
 #[cfg(test)]
 mod tests {
+    use crate::*;
     use assert_cmd::Command;
     use assert_fs::prelude::*;
-    use crate::*;
 
     #[test]
     fn test_cli() {

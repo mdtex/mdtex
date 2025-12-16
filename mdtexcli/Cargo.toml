@@ -11,6 +11,7 @@ serde = "1.0.228"
 serde_json = "1.0.145"
 toml = "0.9.8"
 url = "2.5.7"
+mdtexlib = {path = "../mdtexlib"}
 
 [dev-dependencies]
 assert_cmd = "2"

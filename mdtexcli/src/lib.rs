@@ -1,11 +1,14 @@
 // use argh::FromArgs;
 
 pub mod cli;
+mod project_management;
 mod utils;
 mod watcher;
-mod project_management;
+
+use std::fs;
 
 use cli::MDTeXTopLevelCLI;
+use mdtexlib::compile;
 
 use crate::{project_management::project::Project, utils::query::CTAN_URL};
 
@@ -16,8 +19,25 @@ pub fn run(args: MDTeXTopLevelCLI) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
             });
-        },
-        cli::MDTeXCommands::Watch(watch_sub_command) => {},
+
+            let Ok(text) = fs::read_to_string(&compile_sub_command.input) else {
+                eprintln!("error: file '{}' not found", &compile_sub_command.input);
+                std::process::exit(1);
+            };
+
+            if let Some(output) = compile_sub_command.output {
+                compile(text, output).unwrap_or_else(|e| {
+                    eprintln!("error: {e}");
+                    std::process::exit(1);
+                });
+            } else {
+                compile(text, "./out.html").unwrap_or_else(|e| {
+                    eprintln!("error: {e}");
+                    std::process::exit(1);
+                });
+            }
+        }
+        cli::MDTeXCommands::Watch(watch_sub_command) => {}
         cli::MDTeXCommands::Init(_) => {
             let mut proj = Project::init(std::env::current_dir().unwrap());
             let result = proj.create_project();
@@ -27,7 +47,7 @@ pub fn run(args: MDTeXTopLevelCLI) {
             } else {
                 println!("Could not create project");
             }
-        },
+        }
         cli::MDTeXCommands::New(new_sub_command) => {
             let mut proj = Project::new(new_sub_command.project_directory);
             let result = proj.create_project();
@@ -37,7 +57,7 @@ pub fn run(args: MDTeXTopLevelCLI) {
             } else {
                 println!("Could not create project");
             }
-        },
+        }
         cli::MDTeXCommands::Add(add_sub_command) => {
             #[allow(unused_mut)]
             let mut proj = Project::from_directory(std::env::current_dir().unwrap());
@@ -68,12 +88,10 @@ pub fn run(args: MDTeXTopLevelCLI) {
             } else {
                 panic!("Error adding packages: {:?}", result);
             }
-        },
-        cli::MDTeXCommands::Build(_) => {},
+        }
+        cli::MDTeXCommands::Build(_) => {}
     }
 }
 
 #[cfg(test)]
-mod tests {
-
-}
+mod tests {}

@@ -772,6 +772,7 @@ dependencies = [
  "assert_cmd",
  "assert_fs",
  "indoc",
+ "mdtexlib",
  "mockito",
  "predicates",
  "reqwest",

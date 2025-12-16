@@ -25,3 +25,4 @@ target/
 
 # custom ignores
 notes.md
+Cargo.lock

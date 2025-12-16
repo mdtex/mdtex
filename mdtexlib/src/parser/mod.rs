@@ -11,7 +11,7 @@ mod tests;
 pub enum RawBlock {
     Heading {
         raw_content: String,
-        level: u32,
+        level: u8,
     },
     OrderedList(Vec<String>),
     UnorderedList(Vec<String>),
@@ -26,7 +26,6 @@ pub enum RawBlock {
 impl RawBlock {
     /// Constructs a RawBlock from a string equivalent to a variant of RawBlock
     pub fn from_string(raw_string: impl Deref<Target = str>) -> Self {
-        dbg!(raw_string.to_string());
         if let Some(head) = RawBlock::try_extract_header(&raw_string) {
             return head;
         } else if let Some(code) = RawBlock::try_extract_code(&raw_string) {
@@ -80,7 +79,7 @@ impl RawBlock {
             .captures(raw_string)
             .map(|caps| RawBlock::Heading {
                 raw_content: caps[2].to_string(),
-                level: caps[1].len() as u32,
+                level: caps[1].len() as u8,
             })
     }
 

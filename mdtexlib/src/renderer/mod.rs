@@ -1,5 +1,6 @@
 use build_html::escape_html;
 use build_html::{HtmlChild, HtmlContainer, HtmlElement, HtmlPage, HtmlTag};
+use katex::OutputType;
 
 use crate::ir::{BlockToken, InlineToken, ListItem};
 
@@ -19,7 +20,16 @@ pub fn render(ir_list: Vec<BlockToken>) -> HtmlPage {
                 out.add_html(HtmlElement::new(HtmlTag::PreformattedText).with_child(content.into()))
             }
             BlockToken::BlockMath(m) => {
-                out.add_html(HtmlElement::new(HtmlTag::Div).with_child(m.into()))
+                let opts = katex::Opts::builder()
+                    .display_mode(true)
+                    .output_type(OutputType::Mathml)
+                    .build()
+                    .unwrap();
+                if let Ok(math) = katex::render_with_opts(&m, &opts) {
+                    out.add_html(math);
+                } else {
+                    out.add_html(HtmlElement::new(HtmlTag::Div).with_child(m.into()))
+                }
             }
             BlockToken::Paragraph(inline_tokens) => {
                 out.add_html(make_paragraph(inline_tokens));
@@ -104,11 +114,18 @@ fn inline_to_html(tokens: Vec<InlineToken>) -> Vec<HtmlChild> {
             InlineToken::InlineCode(c) => out.push(HtmlChild::Element(
                 HtmlElement::new(HtmlTag::CodeText).with_child(escape_html(&c).into()),
             )),
-            InlineToken::InlineMath(m) => out.push(
-                HtmlElement::new(HtmlTag::Div)
-                    .with_child(escape_html(&m).into())
-                    .into(),
-            ),
+            InlineToken::InlineMath(m) => {
+                let opts = katex::Opts::builder()
+                    .display_mode(false)
+                    .output_type(OutputType::Mathml)
+                    .build()
+                    .unwrap();
+                if let Ok(math) = katex::render_with_opts(&m, &opts) {
+                    out.push(HtmlChild::Raw(math.into()));
+                } else {
+                    out.push(HtmlChild::Raw(escape_html(&m).into()));
+                }
+            }
             InlineToken::Link { url, text } => out.push(
                 HtmlElement::new(HtmlTag::Link)
                     .with_child(escape_html(&text).into())

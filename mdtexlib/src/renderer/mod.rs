@@ -3,9 +3,11 @@ use build_html::{HtmlChild, HtmlContainer, HtmlElement, HtmlPage, HtmlTag};
 use katex::OutputType;
 
 use crate::ir::{BlockToken, InlineToken, ListItem};
+use crate::renderer::render_math::render_math;
 
 #[cfg(test)]
 mod tests;
+mod render_math;
 
 pub fn render(ir_list: Vec<BlockToken>) -> HtmlPage {
     let mut out = HtmlPage::new();
@@ -20,15 +22,12 @@ pub fn render(ir_list: Vec<BlockToken>) -> HtmlPage {
                 out.add_html(HtmlElement::new(HtmlTag::PreformattedText).with_child(content.into()))
             }
             BlockToken::BlockMath(m) => {
-                let opts = katex::Opts::builder()
-                    .display_mode(true)
-                    .output_type(OutputType::Mathml)
-                    .build()
-                    .unwrap();
-                if let Ok(math) = katex::render_with_opts(&m, &opts) {
+                let math_block = render_math(&m);
+
+                if let Ok(math) = math_block {
                     out.add_html(math);
                 } else {
-                    out.add_html(HtmlElement::new(HtmlTag::Div).with_child(m.into()))
+                    out.add_html(HtmlElement::new(HtmlTag::Div).with_child(m.into()));
                 }
             }
             BlockToken::Paragraph(inline_tokens) => {

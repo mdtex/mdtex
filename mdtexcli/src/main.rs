@@ -1,3 +1,6 @@
+use mdtexcli::{cli::MDTeXTopLevelCLI, run};
+
 fn main() {
-    println!("Hello, world!");
+    let args: MDTeXTopLevelCLI = argh::from_env();
+    run(args);
 }

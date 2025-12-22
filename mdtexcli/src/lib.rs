@@ -10,7 +10,7 @@ use std::fs;
 use cli::MDTeXTopLevelCLI;
 use mdtexlib::compile;
 
-use crate::{project_management::project::Project, utils::query::CTAN_URL};
+use crate::{project_management::project::Project, utils::query::CTAN_URL, watcher::watch};
 
 pub fn run(args: MDTeXTopLevelCLI) {
     match args.nested {
@@ -37,7 +37,7 @@ pub fn run(args: MDTeXTopLevelCLI) {
                 });
             }
         }
-        cli::MDTeXCommands::Watch(watch_sub_command) => {}
+        cli::MDTeXCommands::Watch(watch_sub_command) => watch(watch_sub_command).unwrap(),
         cli::MDTeXCommands::Init(_) => {
             let mut proj = Project::init(std::env::current_dir().unwrap());
             let result = proj.create_project();

@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use crate::{ir::{BlockToken, InlineToken, ListItem}, renderer::inline_to_html};
+use assert_fs::prelude::*;
 use build_html::*;
 
 /// Helper to normalize mathml strings
@@ -130,4 +133,51 @@ fn test_render_math_err() {
     let expected_result = r#"\this error? }"#;
 
     assert_eq!(expected_result, render.to_html_string());
+}
+
+#[test]
+fn test_execute_cmd() {
+    let mut cmd = std::process::Command::new("echo");
+    cmd.arg("hello");
+
+    let temp_dir = assert_fs::TempDir::new().unwrap();
+    crate::renderer::render_math::execute_command(&mut cmd, Some(&temp_dir.to_path_buf()));
+    
+    let out_log = temp_dir.child("out.log");
+    let err_log = temp_dir.child("err.log");
+
+    out_log.assert(predicates::path::exists());
+    err_log.assert(predicates::path::exists());
+    
+    out_log.assert("hello\n");
+}
+
+#[test]
+fn test_compile_latex_to_svg() {
+    let temp_dir = assert_fs::TempDir::new().unwrap();
+
+    let math_block = r#"
+$\int_0^{\infty} x^2\ dx$
+    "#;
+
+    let result = crate::renderer::render_math::compile_latex_to_svg(math_block, &temp_dir.to_string_lossy().to_string(), "test_file");
+
+    assert!(result.is_ok());
+
+    let paths = std::fs::read_dir(temp_dir.to_path_buf()).unwrap();
+
+    let svg_file = temp_dir.child("test_file.svg");
+    svg_file.assert(predicates::path::exists());
+
+    let svg_path = PathBuf::from(result.unwrap());
+    assert_eq!(svg_path.file_name().unwrap().to_string_lossy().to_string(), "test_file.svg");
+}
+
+// #[test]
+fn temp() {
+    let res = crate::renderer::render_math::compile_latex_to_svg("Hello", "../data/test", "out");
+
+    println!("{:?}", res);
+    assert!(res.is_ok());
+    assert!(false);
 }

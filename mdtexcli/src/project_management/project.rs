@@ -1,5 +1,8 @@
+use crate::{
+    project_management::{Package, PackageError, directory::DirectoryWrapper, project_not_found},
+    utils::query::{self, CTANReturn},
+};
 use std::{collections::BTreeMap, error::Error, path::PathBuf};
-use crate::{project_management::{Package, PackageError, directory::DirectoryWrapper, project_not_found}, utils::query::{self, CTANReturn}};
 
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Project {
     /// The name of our project
-    #[serde(rename="project-name")]
+    #[serde(rename = "project-name")]
     pub name: String,
 
     /// The directory wrapper containing our project's files
@@ -15,7 +18,7 @@ pub struct Project {
     directory: Box<DirectoryWrapper>,
 
     /// A list of our projects packages; stored as a BTreeMap for serialization purposes
-    #[serde(rename="packages")]
+    #[serde(rename = "packages")]
     package_list: BTreeMap<String, Package>,
     // side note - should probably switch to a vector and then custom serialize/deserialize as a BTreeMap
 }
@@ -26,10 +29,12 @@ impl Project {
         let directory = DirectoryWrapper::new(directory_path);
 
         // parse name from directory path
-        let name = directory.directory_path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy().to_string();
+        let name = directory
+            .directory_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
 
         let directory = Box::new(directory);
 
@@ -42,24 +47,29 @@ impl Project {
         }
     }
 
+    pub fn directory(&self) -> &Box<DirectoryWrapper> {
+        &self.directory
+    }
+
     /// Create a new project from a given project directory - distinct from init for bookkeeping purposes
     pub fn new(project_directory: String) -> Project {
         Self::init(PathBuf::from(project_directory))
     }
 
-    /// Creates this given project and its associated project files 
+    /// Creates this given project and its associated project files
     pub fn create_project(&mut self) -> Result<(), Box<dyn Error>> {
         self.directory.as_mut().create_directory()?;
         self.directory.create_file("MDTeX.toml")?;
 
         // write the current project metadata to the configuration file
-        self.directory.write_file("MDTeX.toml", &toml::to_string_pretty(self)?)?;
+        self.directory
+            .write_file("MDTeX.toml", &toml::to_string_pretty(self)?)?;
 
         Ok(())
     }
 
     /// Create a Project struct from an existing directory.
-    /// 
+    ///
     /// If the directory does not have the necessary configuration files, return a project not found error
     pub fn from_directory(directory: PathBuf) -> Result<Project, Box<dyn Error>> {
         let directory_wrapper = DirectoryWrapper::from(directory)?;
@@ -79,14 +89,22 @@ impl Project {
 
     /// Add the list of packages passed to our project by querying the CTAN API to check
     /// if they exist, then adding their metadata to our project file
-    pub fn add_packages(&mut self, add: Vec<String>, url: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    pub fn add_packages(
+        &mut self,
+        add: Vec<String>,
+        url: &str,
+    ) -> Result<Vec<String>, Box<dyn Error>> {
         for package in add {
             let res = self.add_package(package.clone(), url);
-            
+
             if res.is_ok() {
                 let package_added = res.unwrap();
                 self.package_list.insert(
-                    package_added.title.strip_prefix("Package ").unwrap_or(&package_added.title).to_string(),
+                    package_added
+                        .title
+                        .strip_prefix("Package ")
+                        .unwrap_or(&package_added.title)
+                        .to_string(),
                     package_added,
                 );
             } else {
@@ -94,9 +112,9 @@ impl Project {
                 println!("Failed to add {}", package);
             }
         }
-        
+
         // write our package metadata to the toml file
-        self.write_metadata("MDTeX.toml");
+        self.write_metadata("MDTeX.toml")?;
 
         let added = self.package_list.keys().cloned().collect();
 
@@ -122,7 +140,10 @@ impl Project {
         let added = result.hits.first().unwrap();
 
         if &added.title != &format!("Package {}", package_name) {
-            return Err(Box::new(PackageError::WrongResult(package_name, added.title.clone())));
+            return Err(Box::new(PackageError::WrongResult(
+                package_name,
+                added.title.clone(),
+            )));
         }
 
         Ok(added.clone())
@@ -143,7 +164,10 @@ mod tests {
 
     use assert_fs::prelude::*;
 
-    use crate::{project_management::{Package, directory::DirectoryWrapper, project::Project}, utils::query::CTAN_URL};
+    use crate::{
+        project_management::{Package, directory::DirectoryWrapper, project::Project},
+        utils::query::CTAN_URL,
+    };
 
     const EXPECTED_KNUTH_JSON: &str = r#"
         {
@@ -235,16 +259,19 @@ mod tests {
                     Package {
                         title: "Package pseudocode".to_string(),
                         path: "/pkg/pseudocode".to_string(),
-                        text: Some("LaTeX environment for specifying algorithms in a natural way".to_string()),
+                        text: Some(
+                            "LaTeX environment for specifying algorithms in a natural way"
+                                .to_string(),
+                        ),
                     },
                 );
                 m
-            }
+            },
         };
 
         let res = project.create_project();
         assert!(res.is_ok());
-        
+
         let res = project.write_metadata("MDTeX.toml");
         assert!(res.is_ok());
     }
@@ -262,28 +289,41 @@ mod tests {
         let mut url = server.url();
         url.push_str("/search/json");
 
-        let mock_knuth = server.mock("GET", "/search/json")
-            .match_query(mockito::Matcher::UrlEncoded("phrase".into(), "knuth-local".into()))
+        let mock_knuth = server
+            .mock("GET", "/search/json")
+            .match_query(mockito::Matcher::UrlEncoded(
+                "phrase".into(),
+                "knuth-local".into(),
+            ))
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(EXPECTED_KNUTH_JSON)
             .create();
 
-        let mock_pseudocode = server.mock("GET", "/search/json")
-            .match_query(mockito::Matcher::UrlEncoded("phrase".into(), "pseudocode".into()))
+        let mock_pseudocode = server
+            .mock("GET", "/search/json")
+            .match_query(mockito::Matcher::UrlEncoded(
+                "phrase".into(),
+                "pseudocode".into(),
+            ))
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(EXPECTED_PSEUDOCODE_JSON)
             .create();
 
-        let mock_math = server.mock("GET", "/search/json")
+        let mock_math = server
+            .mock("GET", "/search/json")
             .match_query(mockito::Matcher::UrlEncoded("phrase".into(), "math".into()))
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(EXPECTED_HEP_MATH_JSON)
             .create();
 
-        let packages_to_add: Vec<String> = vec!["knuth-local".to_string(), "pseudocode".to_string(), "math".to_string()];
+        let packages_to_add: Vec<String> = vec![
+            "knuth-local".to_string(),
+            "pseudocode".to_string(),
+            "math".to_string(),
+        ];
 
         project.add_packages(packages_to_add, &url).unwrap();
 
@@ -316,14 +356,16 @@ mod tests {
         let toml_file = directory.child("MDTeX.toml");
         toml_file.touch().unwrap();
 
-        toml_file.write_str(r#"
+        toml_file.write_str(
+            r#"
             project-name="test_project"
         
             [packages.pseudocode]
             title = "Package pseudocode"
             path = "/pkg/pseudocode"
             text = "LaTeX environment for specifying algorithms in a natural way"
-        "#);
+        "#,
+        );
 
         let project = Project::from_directory(PathBuf::from(directory.to_path_buf()));
 
@@ -336,7 +378,9 @@ mod tests {
             Package {
                 title: "Package pseudocode".to_string(),
                 path: "/pkg/pseudocode".to_string(),
-                text: Some("LaTeX environment for specifying algorithms in a natural way".to_string()),
+                text: Some(
+                    "LaTeX environment for specifying algorithms in a natural way".to_string()
+                ),
             }
         );
     }
@@ -365,11 +409,13 @@ mod tests {
         assert!(project.package_list.is_empty());
         assert!(res.is_err());
 
-        let mock_err = server.mock("GET", "/search/json")
+        let mock_err = server
+            .mock("GET", "/search/json")
             .match_query(mockito::Matcher::UrlEncoded("phrase".into(), "Huh".into()))
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(r#"
+            .with_body(
+                r#"
                 {
                     "numberOfHits": 0,
                     "offset": 0,
@@ -377,7 +423,8 @@ mod tests {
                     "phrase": "huh",
                     "hits": []
                 }
-            "#)
+            "#,
+            )
             .create();
 
         let res = project.add_package("Huh".to_string(), &url);
@@ -386,3 +433,4 @@ mod tests {
         assert!(res.is_err());
     }
 }
+

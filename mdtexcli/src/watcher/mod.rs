@@ -44,13 +44,10 @@ pub fn watch(args: WatchSubCommand) -> Result<(), Error> {
                     if initial {
                         println!("Compiling {}", dir_entry_path.display());
 
-                        let contents =
-                            read_to_string(&dir_entry_path).context("Unable to read file")?;
+                        let mut output = dir_entry_path.clone();
+                        output.set_extension("html");
 
-                        dir_entry_path.set_extension("html");
-
-                        compile(contents, dir_entry_path)
-                            .context("Unable to compile MDTeX file")?;
+                        compile(dir_entry_path, output).context("Unable to compile MDTeX file")?;
                     } else if time_since < Duration::from_secs(5) {
                         println!(
                             "{} has been modified, recompiling...",

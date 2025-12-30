@@ -20,18 +20,13 @@ pub fn run(args: MDTeXTopLevelCLI) {
                 std::process::exit(1);
             });
 
-            let Ok(text) = fs::read_to_string(&compile_sub_command.input) else {
-                eprintln!("error: file '{}' not found", &compile_sub_command.input);
-                std::process::exit(1);
-            };
-
             if let Some(output) = compile_sub_command.output {
-                compile(text, output).unwrap_or_else(|e| {
+                compile(compile_sub_command.input, output).unwrap_or_else(|e| {
                     eprintln!("error: {e}");
                     std::process::exit(1);
                 });
             } else {
-                compile(text, "./out.html").unwrap_or_else(|e| {
+                compile(compile_sub_command.input, "./out.html").unwrap_or_else(|e| {
                     eprintln!("error: {e}");
                     std::process::exit(1);
                 });
@@ -89,7 +84,27 @@ pub fn run(args: MDTeXTopLevelCLI) {
                 panic!("Error adding packages: {:?}", result);
             }
         }
-        cli::MDTeXCommands::Build(_) => {}
+        cli::MDTeXCommands::Build(_b) => {
+            if let Ok(p) = Project::from_directory(std::env::current_dir().unwrap()) {
+                let dir = p.directory();
+
+                for input in dir.iter() {
+                    if input.extension().is_some_and(|ext| ext == "mdt") {
+                        let mut output = input.clone();
+                        output.set_extension("html");
+                        if let Err(e) = compile(input, output) {
+                            eprintln!(
+                                "Error while generating output for {}: {}",
+                                input.display(),
+                                e
+                            );
+                        }
+                    }
+                }
+            } else {
+                eprintln!("Must be in an MDTeX project")
+            }
+        }
     }
 }
 

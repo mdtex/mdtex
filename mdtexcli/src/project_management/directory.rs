@@ -1,5 +1,5 @@
-use std::{error::Error, io::Write, path::PathBuf};
 use super::child_not_found;
+use std::{error::Error, io::Write, path::PathBuf};
 
 /// DirectoryWrapper struct to keep track of the current directories path and children
 #[derive(Debug, Default, PartialEq)]
@@ -18,10 +18,11 @@ impl DirectoryWrapper {
         }
     }
 
+    // NOTE: prefer implementing the From trait instead
     /// Create a new directory wrapper from an already existing directory path
     pub fn from(directory_path: PathBuf) -> Result<DirectoryWrapper, Box<dyn Error>> {
         let mut children: Vec<PathBuf> = Vec::new();
-        
+
         // recursively read all the children in the given directory
         let paths = std::fs::read_dir(&directory_path)?;
         for p in paths {
@@ -35,12 +36,10 @@ impl DirectoryWrapper {
             }
         }
 
-        Ok(
-            Self {
-                directory_path,
-                children,
-            }
-        )
+        Ok(Self {
+            directory_path,
+            children,
+        })
     }
 
     /// Creates the direcotry given its path.
@@ -74,15 +73,20 @@ impl DirectoryWrapper {
 
     /// Find a given file in our directory from its file name
     pub fn find_child(&self, file_name: &str) -> Result<Option<&PathBuf>, Box<dyn Error>> {
-        let file_path = self.children.iter().find(
-            |x| x.file_name().unwrap().to_string_lossy().into_owned() == file_name
-        );
+        let file_path = self
+            .children
+            .iter()
+            .find(|x| x.file_name().unwrap().to_string_lossy().into_owned() == file_name);
 
         Ok(file_path)
     }
 
     /// Writes to a file inside of our directory.
-    pub fn write_file(&mut self, file_name: &str, contents_to_write: &str) -> Result<(), Box<dyn Error>> {
+    pub fn write_file(
+        &mut self,
+        file_name: &str,
+        contents_to_write: &str,
+    ) -> Result<(), Box<dyn Error>> {
         let file = self.find_child(file_name)?;
 
         if let Some(file_path) = file {
@@ -96,7 +100,11 @@ impl DirectoryWrapper {
     }
 
     /// Appends to a file inside of our directory.
-    pub fn append_file(&mut self, file_name: &str, contents_to_write: &str) -> Result<(), Box<dyn Error>> {
+    pub fn append_file(
+        &mut self,
+        file_name: &str,
+        contents_to_write: &str,
+    ) -> Result<(), Box<dyn Error>> {
         let file = self.find_child(file_name)?;
 
         if let Some(file_path) = file {
@@ -107,6 +115,10 @@ impl DirectoryWrapper {
         }
 
         Ok(())
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, PathBuf> {
+        self.children.iter()
     }
 }
 
@@ -137,7 +149,9 @@ mod tests {
         let res = dir.create_file("test.txt");
 
         assert!(res.is_ok());
-        directory_path.child("test.txt").assert(predicates::path::exists());
+        directory_path
+            .child("test.txt")
+            .assert(predicates::path::exists());
     }
 
     #[test]
@@ -153,7 +167,9 @@ mod tests {
         assert!(err_res_write.is_err());
         assert!(err_res_append.is_err());
 
-        directory_path.child("This shouldn't work").assert(predicates::path::missing());
+        directory_path
+            .child("This shouldn't work")
+            .assert(predicates::path::missing());
     }
 
     #[test]
@@ -168,7 +184,7 @@ mod tests {
 
         directory_path.assert(predicates::path::exists());
 
-        let child_res =  dir.create_file("temp.txt");
+        let child_res = dir.create_file("temp.txt");
         assert!(child_res.is_ok());
 
         let file = directory_path.child("temp.txt");
@@ -196,7 +212,9 @@ mod tests {
 
         let res = dir.create_folder("a/b/c");
         assert!(res.is_ok());
-        directory_path.child("a/b/c").assert(predicates::path::exists());
+        directory_path
+            .child("a/b/c")
+            .assert(predicates::path::exists());
     }
 
     #[test]
@@ -219,19 +237,27 @@ mod tests {
 
         let res = dir.create_folder("a/b/c");
         assert!(res.is_ok());
-        directory_path.child("a/b/c").assert(predicates::path::exists());
+        directory_path
+            .child("a/b/c")
+            .assert(predicates::path::exists());
 
         let res = dir.create_file("test.txt");
         assert!(res.is_ok());
-        directory_path.child("test.txt").assert(predicates::path::exists());
+        directory_path
+            .child("test.txt")
+            .assert(predicates::path::exists());
 
         let res = dir.create_file("a/a.txt");
         assert!(res.is_ok());
-        directory_path.child("a/a.txt").assert(predicates::path::exists());
+        directory_path
+            .child("a/a.txt")
+            .assert(predicates::path::exists());
 
         let res = dir.create_file("a/b/b.txt");
         assert!(res.is_ok());
-        directory_path.child("a/b/b.txt").assert(predicates::path::exists());
+        directory_path
+            .child("a/b/b.txt")
+            .assert(predicates::path::exists());
     }
 
     #[test]
@@ -242,14 +268,14 @@ mod tests {
         dir.create_directory().unwrap();
 
         let res1 = dir.create_file("test.txt");
-        let res2= dir.create_folder("test_subdirectory");
+        let res2 = dir.create_folder("test_subdirectory");
         let res3 = dir.create_file("test_subdirectory/test.txt");
 
         assert!(res1.is_ok() && res2.is_ok() && res3.is_ok());
 
         let dir_2_res = DirectoryWrapper::from(directory_path.path().to_path_buf().to_path_buf());
         assert!(dir_2_res.is_ok());
-        
+
         let dir_2 = dir_2_res.unwrap();
 
         assert_eq!(dir.directory_path, dir_2.directory_path);
@@ -296,7 +322,11 @@ mod tests {
         let mut dir = DirectoryWrapper::from(directory_path.to_path_buf()).unwrap();
 
         assert_eq!(dir.children.len(), 3);
-        let paths: Vec<_> = dir.children.iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect();
+        let paths: Vec<_> = dir
+            .children
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
 
         assert!(paths.contains(&"a.txt".to_string()));
         assert!(paths.contains(&"b.txt".to_string()));
@@ -338,3 +368,4 @@ mod tests {
         file.assert("first second");
     }
 }
+
